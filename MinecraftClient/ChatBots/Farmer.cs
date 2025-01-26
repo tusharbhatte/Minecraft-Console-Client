@@ -18,33 +18,33 @@ namespace MinecraftClient.ChatBots
 {
     public class Farmer : ChatBot
     {
-        public const string CommandName = "farmer";
+        public const string CommandName = "farmer"; // 定义命令名称
 
-        public static Configs Config = new();
+        public static Configs Config = new(); // 配置实例
 
         [TomlDoNotInlineObject]
         public class Configs
         {
-            [NonSerialized] private const string BotName = "Farmer";
+            [NonSerialized] private const string BotName = "Farmer"; // 机器人名称
 
-            public bool Enabled = false;
+            public bool Enabled = false; // 是否启用
 
             [TomlInlineComment("$ChatBot.Farmer.Delay_Between_Tasks$")]
-            public double Delay_Between_Tasks = 1.0;
+            public double Delay_Between_Tasks = 1.0; // 任务之间的延迟
 
             public void OnSettingUpdate()
             {
                 if (Delay_Between_Tasks < 1.0)
-                    Delay_Between_Tasks = 1.0;
+                    Delay_Between_Tasks = 1.0; // 确保延迟不小于1秒
             }
         }
 
         private enum State
         {
-            SearchingForCropsToBreak = 0,
-            SearchingForFarmlandToPlant,
-            BoneMealingCrops,
-            CollectingItems
+            SearchingForCropsToBreak = 0, // 搜索要破坏的作物
+            SearchingForFarmlandToPlant, // 搜索要种植的农田
+            BoneMealingCrops, // 使用骨粉
+            CollectingItems // 收集物品
         }
 
         public enum CropType
@@ -58,45 +58,47 @@ namespace MinecraftClient.ChatBots
             Wheat
         }
 
-        private State state = State.SearchingForCropsToBreak;
-        private CropType cropType = CropType.Wheat;
-        private int farmingRadius = 30;
-        private bool running = false;
-        private bool allowUnsafe = false;
-        private bool allowTeleport = false;
-        private bool debugEnabled = false;
+        private State state = State.SearchingForCropsToBreak; // 初始状态
+        private CropType cropType = CropType.Wheat; // 默认作物类型
+        private int farmingRadius = 30; // 农业半径
+        private bool running = false; // 是否运行
+        private bool allowUnsafe = false; // 是否允许不安全操作
+        private bool allowTeleport = false; // 是否允许传送
+        private bool debugEnabled = false; // 是否启用调试
 
-        private int Delay_Between_Tasks_Millisecond => (int)Math.Round(Config.Delay_Between_Tasks * 1000);
+        private int Delay_Between_Tasks_Millisecond => (int)Math.Round(Config.Delay_Between_Tasks * 1000); // 任务之间的延迟（毫秒）
 
         private const string commandDescription =
-            "farmer <start <crop type> [radius:<radius = 30>] [unsafe:<true/false>] [teleport:<true/false>] [debug:<true/false>]|stop>";
+            "farmer <start <crop type> [radius:<radius = 30>] [unsafe:<true/false>] [teleport:<true/false>] [debug:<true/false>]|stop>"; // 命令描述
 
         public override void Initialize()
         {
             if (GetProtocolVersion() < Protocol18Handler.MC_1_13_Version)
             {
-                LogToConsole(Translations.bot_farmer_not_implemented);
+                LogToConsole(Translations.bot_farmer_not_implemented); // 如果协议版本低于1.13，记录日志并返回
                 return;
             }
 
             if (!GetTerrainEnabled())
             {
-                LogToConsole(Translations.bot_farmer_needs_terrain);
+                LogToConsole(Translations.bot_farmer_needs_terrain); // 如果未启用地形，记录日志并返回
                 return;
             }
 
             if (!GetInventoryEnabled())
             {
-                LogToConsole(Translations.bot_farmer_needs_inventory);
+                LogToConsole(Translations.bot_farmer_needs_inventory); // 如果未启用库存，记录日志并返回
                 return;
             }
 
+            // 注册帮助命令
             McClient.dispatcher.Register(l => l.Literal("help")
                 .Then(l => l.Literal(CommandName)
                     .Executes(r => OnCommandHelp(r.Source, string.Empty))
                 )
             );
 
+            // 注册农民命令
             McClient.dispatcher.Register(l => l.Literal(CommandName)
                 .Then(l => l.Literal("stop")
                     .Executes(r => OnCommandStop(r.Source)))
@@ -114,10 +116,10 @@ namespace MinecraftClient.ChatBots
 
         public override void OnUnload()
         {
-            running = false;
-            BotMovementLock.Instance?.UnLock("Farmer");
-            McClient.dispatcher.Unregister(CommandName);
-            McClient.dispatcher.GetRoot().GetChild("help").RemoveChild(CommandName);
+            running = false; // 停止运行
+            BotMovementLock.Instance?.UnLock("Farmer"); // 解锁移动
+            McClient.dispatcher.Unregister(CommandName); // 注销命令
+            McClient.dispatcher.GetRoot().GetChild("help").RemoveChild(CommandName); // 从帮助中移除命令
         }
 
         private int OnCommandHelp(CmdResult r, string? cmd)
@@ -135,32 +137,32 @@ namespace MinecraftClient.ChatBots
         {
             if (!running)
             {
-                return r.SetAndReturn(CmdResult.Status.Fail, Translations.bot_farmer_already_stopped);
+                return r.SetAndReturn(CmdResult.Status.Fail, Translations.bot_farmer_already_stopped); // 如果已经停止，返回失败状态
             }
             else
             {
-                running = false;
-                return r.SetAndReturn(CmdResult.Status.Done, Translations.bot_farmer_stopping);
+                running = false; // 停止运行
+                return r.SetAndReturn(CmdResult.Status.Done, Translations.bot_farmer_stopping); // 返回成功状态
             }
         }
 
         private int OnCommandStart(CmdResult r, CropType whatToFarm, string? otherArgs)
         {
             if (running)
-                return r.SetAndReturn(CmdResult.Status.Fail, Translations.bot_farmer_already_running);
+                return r.SetAndReturn(CmdResult.Status.Fail, Translations.bot_farmer_already_running); // 如果已经运行，返回失败状态
 
             var movementLock = BotMovementLock.Instance;
             if (movementLock is { IsLocked: true })
                 return r.SetAndReturn(CmdResult.Status.Fail,
-                    string.Format(Translations.bot_common_movement_lock_held, "Farmer", movementLock.LockedBy));
+                    string.Format(Translations.bot_common_movement_lock_held, "Farmer", movementLock.LockedBy)); // 如果移动被锁定，返回失败状态
 
-            var radius = 30;
+            var radius = 30; // 默认半径
 
-            state = State.SearchingForFarmlandToPlant;
-            cropType = whatToFarm;
-            allowUnsafe = false;
-            allowTeleport = false;
-            debugEnabled = false;
+            state = State.SearchingForFarmlandToPlant; // 设置初始状态
+            cropType = whatToFarm; // 设置作物类型
+            allowUnsafe = false; // 默认不允许不安全操作
+            allowTeleport = false; // 默认不允许传送
+            debugEnabled = false; // 默认不启用调试
 
             if (!string.IsNullOrWhiteSpace(otherArgs))
             {
@@ -233,7 +235,7 @@ namespace MinecraftClient.ChatBots
 
                             if (parts[1].Equals("true") || parts[1].Equals("1"))
                             {
-                                LogToConsole("Debug enabled!");
+                                LogToConsole("调试已启用！");
                                 debugEnabled = true;
                             }
                             else debugEnabled = false;
@@ -243,24 +245,24 @@ namespace MinecraftClient.ChatBots
                 }
             }
 
-            farmingRadius = radius;
-            running = true;
-            new Thread(() => MainProcess()).Start();
+            farmingRadius = radius; // 设置农业半径
+            running = true; // 设置为运行状态
+            new Thread(() => MainProcess()).Start(); // 启动主进程线程
 
-            return r.SetAndReturn(CmdResult.Status.Done);
+            return r.SetAndReturn(CmdResult.Status.Done); // 返回成功状态
         }
 
         public override void AfterGameJoined()
         {
-            BotMovementLock.Instance?.UnLock("Farmer");
-            running = false;
+            BotMovementLock.Instance?.UnLock("Farmer"); // 解锁移动
+            running = false; // 设置为未运行状态
         }
 
         public override bool OnDisconnect(DisconnectReason reason, string message)
         {
-            BotMovementLock.Instance?.UnLock("Farmer");
-            running = false;
-            return true;
+            BotMovementLock.Instance?.UnLock("Farmer"); // 解锁移动
+            running = false; // 设置为未运行状态
+            return true; // 返回true表示处理断开连接
         }
 
         private void MainProcess()
@@ -272,17 +274,17 @@ namespace MinecraftClient.ChatBots
                     if (!movementLock.Lock("Farmer"))
                     {
                         running = false;
-                        LogToConsole($"§§6§1§0Farmer bot failed to obtain the movement lock for some reason!");
-                        LogToConsole($"§§6§1§0Disable other bots who have movement mechanics, and try again!");
+                        LogToConsole($"§§6§1§0农民机器人由于某种原因未能获得移动锁！");
+                        LogToConsole($"§§6§1§0禁用其他具有移动机制的机器人，然后重试！");
                         return;
                     }
 
-                    LogDebug($"Locked the movement for other bots!");
+                    LogDebug($"已锁定其他机器人的移动！");
                     break;
                 case { IsLocked: true }:
                     running = false;
-                    LogToConsole($"§§6§1§0Farmer bot failed to obtain the movement lock for some reason!");
-                    LogToConsole($"§§6§1§0Disable other bots who have movement mechanics, and try again!");
+                    LogToConsole($"§§6§1§0农民机器人由于某种原因未能获得移动锁！");
+                    LogToConsole($"§§6§1§0禁用其他具有移动机制的机器人，然后重试！");
                     return;
             }
 
@@ -299,10 +301,10 @@ namespace MinecraftClient.ChatBots
 
             while (running)
             {
-                // Don't do anything if the bot is currently eating, we wait for 1 second
+                // 如果机器人正在吃东西，不做任何事情，等待1秒
                 if (AutoEat.Eating)
                 {
-                    LogDebug("Eating...");
+                    LogDebug("正在吃东西...");
                     Thread.Sleep(Delay_Between_Tasks_Millisecond);
                     continue;
                 }
@@ -310,14 +312,14 @@ namespace MinecraftClient.ChatBots
                 switch (state)
                 {
                     case State.SearchingForFarmlandToPlant:
-                        LogDebug("Looking for farmland...");
+                        LogDebug("寻找农田...");
 
                         var cropTypeToPlant = GetSeedItemTypeForCropType(cropType);
 
-                        // If we don't have any seeds on our hot bar, skip this step and try collecting some
+                        // 如果热键栏中没有种子，跳过这一步并尝试收集一些
                         if (!SwitchToItem(cropTypeToPlant))
                         {
-                            LogDebug("No seeds, trying to find some crops to break");
+                            LogDebug("没有种子，尝试寻找一些作物来破坏");
                             state = State.SearchingForCropsToBreak;
                             Thread.Sleep(Delay_Between_Tasks_Millisecond);
                             continue;
@@ -327,7 +329,7 @@ namespace MinecraftClient.ChatBots
 
                         if (farmlandToPlantOn.Count == 0)
                         {
-                            LogDebug("Could not find any farmland, trying to find some crops to break");
+                            LogDebug("找不到任何农田，尝试寻找一些作物来破坏");
                             state = State.SearchingForCropsToBreak;
                             Thread.Sleep(Delay_Between_Tasks_Millisecond);
                             continue;
@@ -336,12 +338,12 @@ namespace MinecraftClient.ChatBots
                         var i = 0;
                         foreach (var location in farmlandToPlantOn.TakeWhile(location => running))
                         {
-                            // Check only every second iteration, minor optimization xD
+                            // 每隔一次迭代检查一次，微小的优化
                             if (i % 2 == 0)
                             {
                                 if (!HasItemOfTypeInInventory(cropTypeToPlant))
                                 {
-                                    LogDebug("Ran out of seeds, looking for crops to break...");
+                                    LogDebug("种子用完了，寻找作物来破坏...");
                                     state = State.SearchingForCropsToBreak;
                                     Thread.Sleep(Delay_Between_Tasks_Millisecond);
                                     continue;
@@ -350,8 +352,8 @@ namespace MinecraftClient.ChatBots
 
                             var yValue = Math.Floor(location.Y) + 1;
 
-                            // TODO: Figure out why this is not working.
-                            // Why we need this: sometimes the server kicks the player for "invalid movement" packets.
+                            // TODO: 找出为什么这不起作用。
+                            // 为什么需要这个：有时服务器会因为“无效移动”数据包踢出玩家。
                             /*if (cropType == CropType.NetherWart)
                                 yValue = (double)(Math.Floor(location.Y) - 1.0) + (double)0.87500;*/
 
@@ -360,48 +362,48 @@ namespace MinecraftClient.ChatBots
 
                             if (WaitForMoveToLocation(location2))
                             {
-                                LogDebug("Moving to: " + location2);
+                                LogDebug("移动到: " + location2);
 
-                                // Stop if we do not have any more seeds left
+                                // 如果没有更多的种子，停止
                                 if (!SwitchToItem(GetSeedItemTypeForCropType(cropType)))
                                 {
-                                    LogDebug("No seeds, trying to find some crops to break");
+                                    LogDebug("没有种子，尝试寻找一些作物来破坏");
                                     break;
                                 }
 
                                 var loc = new Location(Math.Floor(location.X), Math.Floor(location2.Y),
                                     Math.Floor(location.Z));
-                                LogDebug("Sending placeblock to: " + loc);
+                                LogDebug("发送放置方块到: " + loc);
 
                                 SendPlaceBlock(loc, Direction.Up);
                                 Thread.Sleep(300);
                             }
-                            else LogDebug("Can't move to: " + location2);
+                            else LogDebug("无法移动到: " + location2);
 
                             i++;
                         }
 
-                        LogDebug("Finished planting crops!");
+                        LogDebug("完成种植作物！");
                         state = State.SearchingForCropsToBreak;
                         break;
 
                     case State.SearchingForCropsToBreak:
-                        LogDebug("Searching for crops to break...");
+                        LogDebug("寻找作物来破坏...");
 
                         var cropsToCollect = findCrops(farmingRadius, cropType, true);
 
                         if (cropsToCollect.Count == 0)
                         {
-                            LogToConsole("No crops to break, trying to bone meal un-grown ones");
+                            // LogToConsole("没有作物可破坏，尝试用骨粉处理未成熟的作物");
                             state = State.BoneMealingCrops;
                             Thread.Sleep(Delay_Between_Tasks_Millisecond);
                             continue;
                         }
 
-                        // Switch to an axe for faster breaking if the bot has one in his inventory
+                        // 如果机器人在库存中有斧头，切换到斧头以更快地破坏
                         if (cropType is CropType.Melon or CropType.Pumpkin)
                         {
-                            // Start from Diamond axe, if not found, try a tier lower axe
+                            // 从钻石斧头开始，如果没有找到，尝试较低等级的斧头
                             var switched = SwitchToItem(ItemType.DiamondAxe);
 
                             if (!switched)
@@ -416,25 +418,25 @@ namespace MinecraftClient.ChatBots
 
                         foreach (var location in cropsToCollect.TakeWhile(location => running))
                         {
-                            // God damn C# rounding it to 0.94
-                            // This will be needed when bot bone meals carrots or potatoes which are at the first stage of growth,
-                            // because sometimes the bot walks over crops and breaks them
-                            // TODO: Figure out a fix
+                            // C# 将其舍入到 0.94
+                            // 当机器人用骨粉处理处于生长第一阶段的胡萝卜或土豆时，这将是必要的，
+                            // 因为有时机器人会走过作物并破坏它们
+                            // TODO: 找到修复方法
                             // new Location(Math.Floor(location.X) + 0.5, (double)((location.Y - 1) + (double)0.93750), Math.Floor(location.Z) + 0.5)
 
                             if (WaitForMoveToLocation(location))
                                 WaitForDigBlock(location);
 
-                            // Allow some time to pickup the item
+                            // 允许一些时间来拾取物品
                             Thread.Sleep(cropType is CropType.Melon or CropType.Pumpkin ? 400 : 200);
                         }
 
-                        LogDebug("Finished breaking crops!");
+                        LogDebug("完成破坏作物！");
                         state = State.BoneMealingCrops;
                         break;
 
                     case State.BoneMealingCrops:
-                        // Can't be bone mealed
+                        // 不能用骨粉处理
                         if (cropType == CropType.NetherWart)
                         {
                             state = State.SearchingForFarmlandToPlant;
@@ -442,10 +444,10 @@ namespace MinecraftClient.ChatBots
                             continue;
                         }
 
-                        // If we don't have any bone meal on our hot bar, skip this step
+                        // 如果热键栏中没有骨粉，跳过这一步
                         if (!SwitchToItem(ItemType.BoneMeal))
                         {
-                            LogDebug("No bone meal, searching for some farmland to plant seeds on");
+                            LogDebug("没有骨粉，寻找一些农田来种植种子");
                             state = State.SearchingForFarmlandToPlant;
                             Thread.Sleep(Delay_Between_Tasks_Millisecond);
                             continue;
@@ -455,7 +457,7 @@ namespace MinecraftClient.ChatBots
 
                         if (cropsToBonemeal.Count == 0)
                         {
-                            LogDebug("No crops to bone meal, searching for farmland to plant seeds on");
+                            LogDebug("没有作物可用骨粉处理，寻找一些农田来种植种子");
                             state = State.SearchingForFarmlandToPlant;
                             Thread.Sleep(Delay_Between_Tasks_Millisecond);
                             continue;
@@ -464,12 +466,12 @@ namespace MinecraftClient.ChatBots
                         var i2 = 0;
                         foreach (var location in cropsToBonemeal.TakeWhile(location => running))
                         {
-                            // Check only every second iteration, minor optimization xD
+                            // 每隔一次迭代检查一次，微小的优化
                             if (i2 % 2 == 0)
                             {
                                 if (!HasItemOfTypeInInventory(ItemType.BoneMeal))
                                 {
-                                    LogDebug("Ran out of Bone Meal, looking for farmland to plant on...");
+                                    LogDebug("骨粉用完了，寻找农田来种植...");
                                     state = State.SearchingForFarmlandToPlant;
                                     Thread.Sleep(Delay_Between_Tasks_Millisecond);
                                     continue;
@@ -478,24 +480,24 @@ namespace MinecraftClient.ChatBots
 
                             if (WaitForMoveToLocation(location))
                             {
-                                // Stop if we do not have any more bone meal left
+                                // 如果没有更多的骨粉，停止
                                 if (!SwitchToItem(ItemType.BoneMeal))
                                 {
-                                    LogDebug("No bone meal, searching for some farmland to plant seeds on...");
+                                    LogDebug("没有骨粉，寻找一些农田来种植种子...");
                                     break;
                                 }
 
                                 var location2 = new Location(Math.Floor(location.X) + 0.5, location.Y,
                                     Math.Floor(location.Z) + 0.5);
-                                LogDebug("Trying to bone meal: " + location2);
+                                LogDebug("尝试用骨粉处理: " + location2);
 
-                                // Send like 4 bone meal attempts, it should do the job with 2-3, but sometimes doesn't do
+                                // 发送大约4次骨粉尝试，应该可以用2-3次完成，但有时不行
                                 for (var boneMealTimes = 0;
                                      boneMealTimes < (cropType == CropType.Beetroot ? 6 : 5);
                                      boneMealTimes++)
                                 {
-                                    // TODO: Do a check if the carrot/potato is on the first growth stage
-                                    // if so, use: new Location(location.X, (double)(location.Y - 1) + (double)0.93750, location.Z)
+                                    // TODO: 检查胡萝卜/土豆是否处于生长第一阶段
+                                    // 如果是，使用：new Location(location.X, (double)(location.Y - 1) + (double)0.93750, location.Z)
                                     SendPlaceBlock(location2, Direction.Down);
                                 }
 
@@ -505,12 +507,12 @@ namespace MinecraftClient.ChatBots
                             i2++;
                         }
 
-                        LogDebug("Finished bone mealing crops!");
+                        LogDebug("完成用骨粉处理作物！");
                         state = State.CollectingItems;
                         break;
 
                     case State.CollectingItems:
-                        LogDebug("Searching for items to collect...");
+                        LogDebug("寻找物品来收集...");
 
                         var currentLocation = GetCurrentLocation();
                         var items = GetEntities()
@@ -524,25 +526,25 @@ namespace MinecraftClient.ChatBots
 
                         if (items.Any())
                         {
-                            LogDebug("Collecting items...");
+                            LogDebug("收集物品...");
 
                             foreach (var entity in items.TakeWhile(entity => running))
                                 WaitForMoveToLocation(entity.Location);
 
-                            LogDebug("Finished collecting items!");
+                            LogDebug("完成收集物品！");
                         }
-                        else LogDebug("No items to collect!");
+                        else LogDebug("没有物品可收集！");
 
                         state = State.SearchingForFarmlandToPlant;
                         break;
                 }
 
-                LogDebug($"Waiting for {Config.Delay_Between_Tasks:0.00} seconds for next cycle.");
+                LogDebug($"等待 {Config.Delay_Between_Tasks:0.00} 秒进行下一轮循环。");
                 Thread.Sleep(Delay_Between_Tasks_Millisecond);
             }
 
             movementLock?.UnLock("Farmer");
-            LogDebug($"Unlocked the movement for other bots!");
+            LogDebug($"已解锁其他机器人的移动！");
             LogToConsole(Translations.bot_farmer_stopped);
         }
 
@@ -816,14 +818,14 @@ namespace MinecraftClient.ChatBots
         {
             if (MoveToLocation(location: pos, allowUnsafe: allowUnsafe, allowDirectTeleport: allowTeleport))
             {
-                LogDebug("Moving to: " + pos);
+                LogDebug("移动到: " + pos);
 
                 while (GetCurrentLocation().Distance(pos) > tolerance)
                     Thread.Sleep(200);
 
                 return true;
             }
-            else LogDebug("Can't move to: " + pos);
+            else LogDebug("无法移动到: " + pos);
 
             return false;
         }
